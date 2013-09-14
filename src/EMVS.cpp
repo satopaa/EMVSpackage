@@ -3,6 +3,7 @@
 #include "density_norm.h"
 #include "delogit.h"
 #include "beta.h"
+#include "log_g.h"
 #include "M_beta.h"
 #include "M_sigma.h"
 #include "M_p.h"
@@ -87,14 +88,16 @@ SEXP EMVS(SEXP Y_R,
   if(!Rf_isNull(p_R)){
     p = as<double>(p_R);
   }
-  double a, b;
+  double a, b, v1_g;
    if(!Rf_isNull(a_R)){
     a = as<double>(a_R);
   }
  if(!Rf_isNull(b_R)){
     b = as<double>(b_R);
   }
-
+ if(!Rf_isNull(v1_g_R)){
+   v1_g = as<double>(v1_g_R);
+  }
 
   bool temperature_missing = Rf_isNull( temperature_R );
   double temperature;
@@ -115,7 +118,7 @@ SEXP EMVS(SEXP Y_R,
   mat betas = zeros<mat>(L,dim);
   mat posts = zeros<mat>(L,dim);
   
-  vec log_posts = zeros<vec>(L);
+  vec log_post = zeros<vec>(L);
   vec niters = zeros<vec>(L);
   mat E_step;
 
@@ -202,8 +205,9 @@ SEXP EMVS(SEXP Y_R,
       intersects[i] *= sqrt(2*log(w*c)*c*c/(c*c-1));
     } 
     index = find(post > 0.5);
-    // log_post[i] = 
 
+    log_post[i] = log_g(index,X,Y,1,1,0,v1_g,type,a,b);
+    //log_post[i] = 1;
     niters[i] = niter;
   }
   
@@ -221,7 +225,7 @@ SEXP EMVS(SEXP Y_R,
   list["inv_var"] = inv_var;
   list["type"] = type;
   
-  if(type.compare("betabinomial") || (type.compare("fixed")){
+  if(type.compare("betabinomial") || (type.compare("fixed"))){
     list["p_k"] = p_k;
   } else if (type.compare("logistic")){
       //list["theta"] = "theta_k";

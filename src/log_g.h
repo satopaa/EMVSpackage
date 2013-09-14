@@ -4,5 +4,7 @@
 #include <RcppArmadillo.h>
 using namespace Rcpp;
 using namespace arma;
-double log_g(uvec &gamma, mat *X, mat *Y, double eta, double lambda, double v0, double v1, string type, );
+using namespace std;
+
+double log_g(uvec &gamma, mat &X, mat &Y, double eta, double lambda, double v0, double v1, const string &type, double a, double b);
 #endif
