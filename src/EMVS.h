@@ -1,6 +1,5 @@
 #ifndef _EMVSpackage_EMVS_H
 #define _EMVSpackage_EMVS_H
-
 #include <RcppArmadillo.h>
 
 RcppExport SEXP EMVS(SEXP Y_R,

@@ -3,7 +3,7 @@
 #include <math.h> 
 
 double delogit(double x){
-    double temp = exp(x);
-    temp /= (1+temp);
-    return temp;
+    x = exp(x);
+    x /= (1+x);
+    return x;
 }

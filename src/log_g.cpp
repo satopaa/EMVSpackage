@@ -6,9 +6,9 @@
 double log_g(uvec &gamma, mat &X, mat &Y, double eta, double lambda, double v0, double v1, const string &type, double a, double b){
   int q = gamma.n_elem;
   double Ssq, log_val;
+  int n = Y.n_elem;
+  int N = X.n_cols;
   if(q > 0){
-    int n = Y.n_elem;
-    int N = X.n_cols;
     mat X_gamma = X.cols(gamma);
     vec diag = ones<vec>(q)*v1;
     mat X_tilde = join_cols(X_gamma, diagmat(sqrt(1/diag)));
@@ -18,9 +18,9 @@ double log_g(uvec &gamma, mat &X, mat &Y, double eta, double lambda, double v0, 
     log_val -= (n+eta)/2*log(eta*lambda+Ssq);
     log_val += log_prior(gamma,type,a,b,N);
   } else {
-    //Ssq = Y.t()%*%Y;
-    //log =  -(n+eta)/2*log(eta*lambda+Ssq);
-    //log += log_prior(gamma,type,probs,a,b,Sigma, X.n_cols);
+    Ssq = as_scalar(Y.t()*Y);
+    log_val =  -(n+eta)/2*log(eta*lambda+Ssq);
+    log_val += log_prior(gamma,type,a,b,N);
   }
   return log_val;
 }

@@ -59,27 +59,28 @@ SEXP EMVS(SEXP Y_R,
 	  SEXP b_v1_R,
 	  SEXP v1_g_R){
 
-  // First recast all R-types to C++-types:
+  // First recast all R-types to C++-types: MUST BE DONE FASTER!
   vec Y = as<vec>(Y_R);  
   mat X = as<mat>(X_R);  
   mat Xt = X.t();  
 
   vec v0s = as<vec>(v0s_R);
-  double v0, v1, v_k, p_k, p, eps;
+  double v0, v_k, p_k, p, eps;
   int niter, i;
   double sigma_init = as<double>(sigma_init_R);
-  string type = as<string>(type_R);
+  const string type = as<string>(type_R);
   double epsilon = as<double>(epsilon_R);
     
-  int L = v0s.n_elem;
-  int dim = X.n_cols;
-  int n = X.n_rows;
+  const int L = v0s.n_elem;
+  const int dim = X.n_cols;
+  const int n = X.n_rows;
 
-  bool v1_missing = Rf_isNull( v1_R );
+  bool v1_missing = Rf_isNull(v1_R);
+  double v1;
   vec v1s;
   if(v1_missing){
-    v1 = 1000; // NOTE NOTE NOTE NOTE
-    v1s = zeros<vec>(L);
+    //v1 = 1000; // NOTE NOTE NOTE NOTE
+    v1s = zeros<vec>(L); 
   } else {
     v1 = as<double>(v1_R);
     v1s = ones<vec>(L)*v1;    
@@ -88,18 +89,19 @@ SEXP EMVS(SEXP Y_R,
   if(!Rf_isNull(p_R)){
     p = as<double>(p_R);
   }
-  double a, b, v1_g;
-   if(!Rf_isNull(a_R)){
-    a = as<double>(a_R);
+  
+  double a,b;
+  if(!Rf_isNull(a_R) && !Rf_isNull(b_R)){
+     a = as<double>(a_R);
+     b = as<double>(b_R);
   }
- if(!Rf_isNull(b_R)){
-    b = as<double>(b_R);
+  
+  double v1_g;
+  if(!Rf_isNull(v1_g_R)){
+    v1_g = as<double>(v1_g_R);
   }
- if(!Rf_isNull(v1_g_R)){
-   v1_g = as<double>(v1_g_R);
-  }
-
-  bool temperature_missing = Rf_isNull( temperature_R );
+  
+  bool temperature_missing = Rf_isNull(temperature_R);
   double temperature;
   if(temperature_missing){
     temperature = 1;
@@ -107,27 +109,26 @@ SEXP EMVS(SEXP Y_R,
     temperature = as<double>(temperature_R);
   }
 
-  bool beta_init_missing = Rf_isNull( beta_init_R );
+  bool beta_init_missing = Rf_isNull(beta_init_R);
   vec beta_init;
   if(!beta_init_missing){
     beta_init = as<vec>(beta_init_R);
   } 
 
-  vec intersects = zeros<vec>(L);
+  vec intersects = zeros<vec>(L); // These do not have to be declared zero in the beginning:
   vec sigmas = zeros<vec>(L);
   mat betas = zeros<mat>(L,dim);
-  mat posts = zeros<mat>(L,dim);
-  
+  mat posts = zeros<mat>(L,dim);  
   vec log_post = zeros<vec>(L);
   vec niters = zeros<vec>(L);
-  mat E_step;
 
+  mat E_step;
   mat XtY = Xt*Y;
   mat XtX = Xt*X;
   uvec index;
   vec beta_k, beta_new;
   double sigma_k, c, w;
-  vec inv_var;
+  vec inv_var, inv_var_temp;
   vec post;
 
   Rcout << " Iteration begins: " << endl;
@@ -135,8 +136,8 @@ SEXP EMVS(SEXP Y_R,
     v0 = v0s[i];
     
     if(beta_init_missing){
-      inv_var = ones<vec>(dim)*( (v0s[i]+v1)/(2*v0s[i]*v1) );
-      beta_k = M_beta(XtY, X, XtX, inv_var); // NEEDS TO IMPLEMENT WOODBURRY FORMULA
+      inv_var_temp = ones<vec>(dim)*( (v0s[i]+v1)/(2*v0s[i]*v1) );
+      beta_k = M_beta(XtY, X, XtX, inv_var_temp); // NEEDS TO IMPLEMENT WOODBURRY FORMULA
     } else {
       beta_k = beta_init;
     }
@@ -150,45 +151,81 @@ SEXP EMVS(SEXP Y_R,
       v_k = v1;
     }
     
-    if(type.compare("betabinomial")){
+    if(type.compare("betabinomial") == 0){
       p_k = 0.5;
-    } else if (type.compare("fixed")){
+    } else if (type.compare("fixed") == 0){
       p_k = p;
-    } else if(type.compare("logistic")){
+    } else if(type.compare("logistic") == 0){
       // NOT IMPLEMENTED YET
     }
     eps = epsilon + 1;
     niter = 1;
     
+    /////////////////////////// TESTING ////////////////////////////
+       /*
+	 vec beta_k_test;
+    beta_k_test << 1 << 2 << 3;
+    double sigma_test = 2;
+    double   v0_test = 0.2;
+    double   v1_test = 0.8;
+    double   t_test = 0.8;
+    double   p_test = 0.5;
+
+    mat test_mat = E_beta_binom(beta_k_test, sigma_test, v0_test, v1_test, p_test, t_test);
+    test_mat.print("testing:");
+
+
+    vec inv_var_test = ones<vec>(500);
+    vec test_mat2 = M_beta(XtY, X, XtX, inv_var_test);
+    test_mat2.print("testing2:");
+
+
+    beta_k_test = ones<vec>(500)*2.1;
+    double test_double = M_sigma(Y, X, beta_k_test, inv_var_test, 1, 1);
+    Rcout << "Testing: " << test_double << endl;
+    
+    beta_k_test << 1 << 2 << 3;
+    test_double = M_p(beta_k_test, 1.2, 3.5);
+    Rcout << "Testing: " << test_double << endl;
+
+       */
+    /////////////////////////// TESTING ////////////////////////////
+
+
+
     while(eps > epsilon){
-      Rcout << "v0 = " << v0 << "; iter = " << niter++ << endl;
+      //Rcout << "v0 = " << v0 << "; iter = " << niter++ << endl;
       
-      if(type.compare("betabinomial") || type.compare("fixed")){
+      if(( type.compare("betabinomial") == 0) || (type.compare("fixed") == 0)){
 	E_step = E_beta_binom(beta_k, sigma_k, v0, v_k, p_k, temperature);
-      }  else if(type.compare("MRF")){
+	//Rcout << "EXPECT STEP!!" << endl;
+      }  else if(type.compare("MRF") == 0){
 	// NOT IMPLEMENTED YET
-      }  else if(type.compare("logistic")){
+      }  else if(type.compare("logistic") == 0){
 	// NOT IMPLEMENTED YET
       }
       inv_var = E_step.col(0);
-      post = E_step.col(0);
+      post = E_step.col(1);
       
       beta_k = M_beta(XtY, X, XtX, inv_var);
       sigma_k = M_sigma(Y,X,beta_k, inv_var, 1, 1);
       
-      if(type.compare("betabinomial")){
+      if(type.compare("betabinomial") == 0){
+	//Rcout << "Printing p_k: " << p_k << endl;
 	p_k = M_p(post, a, b);
-      }  else if(type.compare("logistic")){
+	//Rcout << "Printing p_k: " << p_k << endl;
+      }  else if(type.compare("logistic") == 0){
 	// NOT IMPLEMENTED YET
+	Rcout << "WRONG" << endl;
       }
       
-      if(!Rf_isNull(v1_R)){
+      if(v1_missing){
 	// NOT IMPLEMENTED YET
       }
       
       eps = max(abs(beta_new - beta_k));
       beta_new = beta_k;
-      Rcout << eps << endl;
+      //Rcout << eps << endl;
     }
     
     // Store values:
@@ -198,7 +235,7 @@ SEXP EMVS(SEXP Y_R,
     v1s[i] = v_k;
 
     c = sqrt(v1s[i]/v0s[i]);
-    if(type.compare("betabinomial") || type.compare("fixed")){
+    if(( type.compare("betabinomial") == 0) || (type.compare("fixed") == 0)){
       w = (1-p_k)/p_k;
       intersects[i] = sigmas[i];
       intersects[i] *= sqrt(v0s[i]);
@@ -225,9 +262,9 @@ SEXP EMVS(SEXP Y_R,
   list["inv_var"] = inv_var;
   list["type"] = type;
   
-  if(type.compare("betabinomial") || (type.compare("fixed"))){
+  if(( type.compare("betabinomial") == 0) || (type.compare("fixed") == 0)){
     list["p_k"] = p_k;
-  } else if (type.compare("logistic")){
+  } else if (type.compare("logistic") == 0){
       //list["theta"] = "theta_k";
   } 
   return list;

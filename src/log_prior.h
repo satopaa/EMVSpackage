@@ -6,5 +6,5 @@ using namespace Rcpp;
 using namespace arma;
 using namespace std;
 
-double log_prior(uvec &gamma, const string &type, double a, double b, int n);
+double log_prior(uvec& gamma, const string &type, double a, double b, int n);
 #endif
