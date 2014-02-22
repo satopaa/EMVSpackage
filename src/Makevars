@@ -1,3 +1,10 @@
 ## Use the R_HOME indirection to support installations of multiple R version
-PKG_LIBS = `$(R_HOME)/bin/Rscript -e "Rcpp:::LdFlags()"` $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
+NLOPT_VERSION = 2.3
 
+NLOPT_LIBS = -lm nlopt-${NLOPT_VERSION}/lib/libnlopt.a
+
+NLOPT_INCL = -I./nlopt-${NLOPT_VERSION}/include
+
+PKG_CPPFLAGS = ${NLOPT_INCL}
+PKG_CFLAGS = -pipe ${NLOPT_INCL}
+PKG_LIBS = `$(R_HOME)/bin/Rscript -e "Rcpp:::LdFlags()"` $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS) ${NLOPT_LIBS}

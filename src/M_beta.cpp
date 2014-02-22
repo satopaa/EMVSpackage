@@ -10,8 +10,8 @@ vec M_beta(mat &XtY, mat &X, mat &XtX, vec &inv_var){
   } else {
     mat Psi = diagmat(inv_var);
     Psi += XtX;
-    Psi = inv(Psi);
-    Psi *= XtY;
+    Psi = symmatu(Psi);
+    Psi = solve(Psi, XtY);
     return Psi;
   }
 }

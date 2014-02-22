@@ -1,14 +1,18 @@
 #include "EMVS.h"
 #include "E_beta_binom.h"
+#include "E_logistic.h"
 #include "density_norm.h"
 #include "delogit.h"
 #include "beta.h"
 #include "log_g.h"
 #include "M_beta.h"
+#include "M_theta.h"
 #include "M_sigma.h"
 #include "M_p.h"
+#include "Q_logistic.h"
 
 #include <math.h> 
+#include <ctime>
 
 using namespace std;
 using namespace Rcpp;
@@ -59,17 +63,31 @@ SEXP EMVS(SEXP Y_R,
 	  SEXP b_v1_R,
 	  SEXP v1_g_R){
 
+  clock_t tstart, tend; // Debugging
+  bool debug = true;
+
   // First recast all R-types to C++-types: MUST BE DONE FASTER!
+  if(debug)tstart = clock(); // START
   vec Y = as<vec>(Y_R);  
   mat X = as<mat>(X_R);  
-  mat Xt = X.t();  
+  //mat Xt = X.t();  
+  if(debug)Rcout << "Setup (Y, X, Xt) took "<< difftime(clock(), tstart)/CLOCKS_PER_SEC <<" second(s)."<< endl;
 
+
+  if(debug)tstart = clock(); // START
   vec v0s = as<vec>(v0s_R);
   double v0, v_k, p_k, p, eps;
   int niter, i;
   double sigma_init = as<double>(sigma_init_R);
-  const string type = as<string>(type_R);
   double epsilon = as<double>(epsilon_R);
+
+  const string type = as<string>(type_R);
+  bool betabinomial = (type.compare("betabinomial") == 0);
+  bool fixed = (type.compare("fixed") == 0);
+  bool logistic = (type.compare("logistic") == 0);
+  bool MRF = (type.compare("MRF") == 0);
+
+
     
   const int L = v0s.n_elem;
   const int dim = X.n_cols;
@@ -90,6 +108,19 @@ SEXP EMVS(SEXP Y_R,
     p = as<double>(p_R);
   }
   
+  mat Z;
+  if(logistic){
+    if(!Rf_isNull(Z_R)){
+      Z = as<mat>(Z_R);
+    } else {
+      Rcout << "For the logistic prior Z must be specified" << endl;
+    }
+  }
+  
+  if(debug)Rcout << "Section 2 took "<< difftime(clock(), tstart)/CLOCKS_PER_SEC <<" second(s)."<< endl;
+
+  if(debug)tstart = clock(); // START
+
   double a,b;
   if(!Rf_isNull(a_R) && !Rf_isNull(b_R)){
      a = as<double>(a_R);
@@ -114,24 +145,33 @@ SEXP EMVS(SEXP Y_R,
   if(!beta_init_missing){
     beta_init = as<vec>(beta_init_R);
   } 
+  if(debug)Rcout << "Section 3 took "<< difftime(clock(), tstart)/CLOCKS_PER_SEC <<" second(s)."<< endl;
 
-  vec intersects = zeros<vec>(L); // These do not have to be declared zero in the beginning:
-  vec sigmas = zeros<vec>(L);
-  mat betas = zeros<mat>(L,dim);
-  mat posts = zeros<mat>(L,dim);  
-  vec log_post = zeros<vec>(L);
-  vec niters = zeros<vec>(L);
+  vec intersects(L); 
+  vec sigmas(L);
+  mat betas(L,dim);
+  mat posts(L,dim);  
+  vec log_post(L);
+  vec niters(L);
 
+  vec theta_k(dim);
+  vec linpred(dim);
   mat E_step;
-  mat XtY = Xt*Y;
-  mat XtX = Xt*X;
+
+  if(debug)tstart = clock(); // START
+  mat XtY = X.t()*Y; 
+  if(debug)Rcout << "Section 4 took "<< difftime(clock(), tstart)/CLOCKS_PER_SEC <<" second(s)."<< endl;
+  if(debug)tstart = clock(); // START
+  mat XtX = symmatu(X.t()*X); // Transpose with itself is optimized!
+  if(debug) Rcout << "Section 5 took "<< difftime(clock(), tstart)/CLOCKS_PER_SEC <<" second(s)."<< endl;
   uvec index;
   vec beta_k, beta_new;
   double sigma_k, c, w;
   vec inv_var, inv_var_temp;
   vec post;
 
-  Rcout << " Iteration begins: " << endl;
+
+  //  Rcout << " Iteration begins: " << endl;
   for(i = 0; i < L; ++i){
     v0 = v0s[i];
     
@@ -151,18 +191,18 @@ SEXP EMVS(SEXP Y_R,
       v_k = v1;
     }
     
-    if(type.compare("betabinomial") == 0){
+    if(betabinomial){
       p_k = 0.5;
-    } else if (type.compare("fixed") == 0){
+    } else if (fixed){
       p_k = p;
-    } else if(type.compare("logistic") == 0){
-      // NOT IMPLEMENTED YET
+    } else if(logistic){
+      theta_k = zeros<vec>(Z.n_cols);
     }
     eps = epsilon + 1;
     niter = 1;
     
     /////////////////////////// TESTING ////////////////////////////
-       /*
+    /*     
 	 vec beta_k_test;
     beta_k_test << 1 << 2 << 3;
     double sigma_test = 2;
@@ -187,36 +227,84 @@ SEXP EMVS(SEXP Y_R,
     beta_k_test << 1 << 2 << 3;
     test_double = M_p(beta_k_test, 1.2, 3.5);
     Rcout << "Testing: " << test_double << endl;
+    */
+       
+    vec beta_k_test;
+    beta_k_test  << 1 << 2 << 3;
+    double sigma_test = 2;
+    double v0_test = 0.2;
+    double v_k_test = 0.4;
+    vec exp_linpred_test;
+    exp_linpred_test << 0.3 << 0.5 << 0.8;
+    double temperature_test = 0.8;
+    mat test_result = E_logistic(beta_k_test, sigma_test, v0_test, v_k_test, exp_linpred_test, temperature_test);
+    //test_result.print();
 
-       */
+    double a_test = 1.3;
+    double b_test = 1.5;
+    mat Z_test = diagmat(exp_linpred_test);
+    vec theta_k_test;
+    theta_k_test << 1.3 << 0.5 << 0.7;
+    vec post_test;
+    post_test << 0.2 << 0.3 << 0.5;
+    vec theta_test = M_theta(theta_k_test, Z_test, post_test, a_test, b_test);
+    theta_test.print();
+    
+    //mat auxiliary[4];
+    //auxiliary[0] = Z_test;
+    //auxiliary[1] = post_test;
+    //auxiliary[2] = a_test;
+    //auxiliary[3] = b_test;
+    //std::vector<double> grad_test (3,0.6);
+    //std::vector<double> x_test (3,0.8);
+    //double res_test = Q_logistic(x_test, grad_test, auxiliary);
+    //Rcout << res_test << endl;
+      
+
     /////////////////////////// TESTING ////////////////////////////
 
+    // test_a = 2.0;
+    // test_b = 4.0;
+    
 
+    //sleep(10);
+
+    //while(FALSE){
 
     while(eps > epsilon){
       //Rcout << "v0 = " << v0 << "; iter = " << niter++ << endl;
       
-      if(( type.compare("betabinomial") == 0) || (type.compare("fixed") == 0)){
+      if(betabinomial || fixed){
+	if(debug)tstart = clock(); // START
 	E_step = E_beta_binom(beta_k, sigma_k, v0, v_k, p_k, temperature);
+	if(debug)Rcout << "E-step took "<< difftime(clock(), tstart)/CLOCKS_PER_SEC <<" second(s)."<< endl;
 	//Rcout << "EXPECT STEP!!" << endl;
-      }  else if(type.compare("MRF") == 0){
+      }  else if(MRF){
 	// NOT IMPLEMENTED YET
-      }  else if(type.compare("logistic") == 0){
-	// NOT IMPLEMENTED YET
+      }  else if(logistic){
+	linpred = Z * theta_k;
+	vec exp_linpred =  delogit(linpred);
+	E_step = E_logistic(beta_k, sigma_k, v0, v_k, exp_linpred, temperature); // This works!	
       }
       inv_var = E_step.col(0);
       post = E_step.col(1);
       
+      if(debug) tstart = clock(); // START
       beta_k = M_beta(XtY, X, XtX, inv_var);
+      if(debug)Rcout << "M-step beta took "<< difftime(clock(), tstart)/CLOCKS_PER_SEC <<" second(s)."<< endl;
+
+      if(debug)tstart = clock(); // START
       sigma_k = M_sigma(Y,X,beta_k, inv_var, 1, 1);
+      if(debug)Rcout << "M-step sigma_k took "<< difftime(clock(), tstart)/CLOCKS_PER_SEC <<" second(s)."<< endl;
       
-      if(type.compare("betabinomial") == 0){
-	//Rcout << "Printing p_k: " << p_k << endl;
+      if(betabinomial){
+	if(debug)tstart = clock(); // START
 	p_k = M_p(post, a, b);
-	//Rcout << "Printing p_k: " << p_k << endl;
-      }  else if(type.compare("logistic") == 0){
-	// NOT IMPLEMENTED YET
-	Rcout << "WRONG" << endl;
+	if(debug)Rcout << "M-step p_k took "<< difftime(clock(), tstart)/CLOCKS_PER_SEC <<" second(s)."<< endl;
+      }  else if(logistic){
+	if(debug)tstart = clock(); // START
+	theta_k = M_theta(theta_k, Z, post, a, b); // This works!
+	if(debug)Rcout << "M-step theta took "<< difftime(clock(), tstart)/CLOCKS_PER_SEC <<" second(s)."<< endl;
       }
       
       if(v1_missing){
@@ -235,7 +323,7 @@ SEXP EMVS(SEXP Y_R,
     v1s[i] = v_k;
 
     c = sqrt(v1s[i]/v0s[i]);
-    if(( type.compare("betabinomial") == 0) || (type.compare("fixed") == 0)){
+    if(betabinomial || fixed){
       w = (1-p_k)/p_k;
       intersects[i] = sigmas[i];
       intersects[i] *= sqrt(v0s[i]);
@@ -243,13 +331,15 @@ SEXP EMVS(SEXP Y_R,
     } 
     index = find(post > 0.5);
 
-    log_post[i] = log_g(index,X,Y,1,1,0,v1_g,type,a,b);
-    //log_post[i] = 1;
+    log_post[i] = log_g(index,X,Y,1,1,0,v1_g,"betabinomial",a,b);
     niters[i] = niter;
   }
-  
+ 
 
+ 
+  /////////////////////////////////////////////////////////////////////////////
   // Wrap the results into a list and return.
+  /////////////////////////////////////////////////////////////////////////////
   List list;
   list["betas"] = betas;
   list["log_post"] = log_post;
@@ -262,10 +352,10 @@ SEXP EMVS(SEXP Y_R,
   list["inv_var"] = inv_var;
   list["type"] = type;
   
-  if(( type.compare("betabinomial") == 0) || (type.compare("fixed") == 0)){
+  if(betabinomial || fixed){
     list["p_k"] = p_k;
-  } else if (type.compare("logistic") == 0){
-      //list["theta"] = "theta_k";
+  } else if (logistic){
+    list["theta"] = theta_k;
   } 
   return list;
 }

@@ -1,5 +1,13 @@
 
 ## This assume that we can call Rscript to ask Rcpp about its locations
 ## Use the R_HOME indirection to support installations of multiple R version
-PKG_LIBS = $(shell $(R_HOME)/bin/Rscript.exe -e "Rcpp:::LdFlags()") $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
+NLOPT_VERSION = 2.3
 
+NLOPT_LIBS = -lm nlopt-${NLOPT_VERSION}/lib/libnlopt_cxx.a
+
+NLOPT_INCL = -I./nlopt-${NLOPT_VERSION}/include
+
+PKG_CPPFLAGS = ${NLOPT_INCL}
+PKG_CFLAGS = -pipe ${NLOPT_INCL}
+
+PKG_LIBS = $(shell $(R_HOME)/bin/Rscript.exe -e "Rcpp:::LdFlags()") $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS) ${NLOPT_LIBS}

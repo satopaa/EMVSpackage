@@ -1,5 +1,8 @@
 #ifndef _EMVSpackage_EMVS_H
 #define _EMVSpackage_EMVS_H
+
+//#define ARMA_NO_DEBUG
+//#include <Accelerate/Accelerate.h>
 #include <RcppArmadillo.h>
 
 RcppExport SEXP EMVS(SEXP Y_R,

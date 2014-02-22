@@ -2,7 +2,7 @@
 #include "delogit.h"
 #include <math.h> 
 
-double delogit(double x){
+vec delogit(vec &x){
     x = exp(x);
     x /= (1+x);
     return x;
